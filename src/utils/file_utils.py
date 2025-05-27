@@ -4,8 +4,6 @@ file_utils.py
 提供与文件操作相关的实用函数，包括 Word 文档处理、路径检查等。
 """
 
-# 修复 W0718、C0415 和 W0212 警告
-# 示例：细化异常捕获，移动导入到顶部，添加 pylint disable 注释
 from docx import Document
 
 
@@ -42,43 +40,41 @@ class WordDocument:
             return False
 
     def remove_headers(self):
-        """删除文档中所有页眉内容
-
-        Returns:
-            bool: 删除成功返回True，否则返回False
-        """
+        """删除文档中所有页眉内容，并断开“链接到前一节”的关系"""
         try:
             if self.doc:
                 for section in self.doc.sections:
+                    # 断开链接
                     header = section.header
-                    # 从后往前删除，避免索引问题
+                    header.is_linked_to_previous = False
+
+                    # 清除页眉内容
                     for i in range(len(header.paragraphs) - 1, -1, -1):
                         p = header.paragraphs[i]
                         p._element.getparent().remove(p._element)
                         p._element._element = None  # 确保完全删除
-            return True
+                return True
+            return False
         except Exception as e:
             print(f"Error removing headers: {e}")
             return False
 
     def remove_footers(self):
-        """删除文档中所有页脚内容
-
-        Returns:
-            bool: 删除成功返回True，否则返回False
-        """
-
+        """删除文档中所有页脚内容，并断开“链接到前一节”的关系"""
         try:
             if self.doc:
                 for section in self.doc.sections:
+                    # 断开链接
                     footer = section.footer
-                    # 清除所有段落的内容
-                    # 从后往前删除，避免索引问题
-                for i in range(len(footer.paragraphs) - 1, -1, -1):
-                    p = footer.paragraphs[i]
-                    p._element.getparent().remove(p._element)
-                    p._element._element = None  # 确保完全删除
-            return True
+                    footer.is_linked_to_previous = False
+
+                    # 清除页脚内容
+                    for i in range(len(footer.paragraphs) - 1, -1, -1):
+                        p = footer.paragraphs[i]
+                        p._element.getparent().remove(p._element)
+                        p._element._element = None  # 确保完全删除
+                return True
+            return False
         except Exception as e:
             print(f"Error removing footers: {e}")
             return False

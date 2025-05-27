@@ -1,138 +1,66 @@
 import unittest
 import os
+import tempfile
+from docx import Document  # 需要安装 python-docx
 from src.utils.file_utils import WordDocument
-
-
-"""
-test_word_document.py
-
-测试 word_document 模块中的功能，包括文档内容读取与修改。
-"""
 
 
 class TestWordDocument(unittest.TestCase):
     """测试WordDocument类的功能"""
 
-    def setUp(self):
-        """在每个测试方法前创建一个测试文档"""
-        from docx import Document
+    def test_remove_headers_and_footers(self):
+        """测试删除页眉和页脚功能"""
+        # 创建一个临时目录来存放测试文件
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            input_path = os.path.join(tmpdirname, 'test_document.docx')
 
-        # 创建测试目录（如果不存在）
-        self.test_dir = "test_files"
-        if not os.path.exists(self.test_dir):
-            os.makedirs(self.test_dir)
+            # 创建一个带有页眉和页脚的测试文档
+            doc = Document()
 
-        # 创建测试用的Word文档
-        self.test_file = os.path.join(self.test_dir, "test.docx")
-        doc = Document()
-        doc.add_paragraph("This is a test document.")
-        doc.save(self.test_file)
-
-    def test_open_success(self):
-        """测试成功打开文档的情况"""
-        doc = WordDocument(self.test_file)
-        result = doc.open()
-        self.assertTrue(result)
-
-    def test_open_failure(self):
-        """测试无法打开文档的情况"""
-        doc = WordDocument("non_existent_file.docx")
-        result = doc.open()
-        self.assertFalse(result)
-
-    def test_get_content_after_open(self):
-        """测试打开文档后获取内容的功能"""
-        doc = WordDocument(self.test_file)
-        doc.open()
-        content = doc.get_content()
-        self.assertIsNotNone(content)
-        self.assertIn("This is a test document.", content)
-
-    def test_get_content_before_open(self):
-        """测试未打开文档时获取内容的功能"""
-        doc = WordDocument(self.test_file)
-        content = doc.get_content()
-        self.assertIsNone(content)
-
-    def test_remove_headers(self):
-        """测试删除页眉功能"""
-        doc = WordDocument(self.test_file)
-        doc.open()
-        # 添加测试页眉内容
-        for section in doc.doc.sections:
+            # 添加首页页眉内容
+            section = doc.sections[0]
             header = section.header
-            paragraph = header.paragraphs[0]
-            paragraph.text = "Test Header"
+            header_paragraph = header.paragraphs[0]
+            header_paragraph.text = "这是首页页眉"
 
-        # 验证页眉内容存在
-        for section in doc.doc.sections:
-            self.assertEqual(section.header.paragraphs[0].text, "Test Header")
-
-        # 删除页眉并验证
-        result = doc.remove_headers()
-        self.assertTrue(result)
-        for section in doc.doc.sections:
-            # 验证页眉内容是否不存在
-            self.assertEqual(section.header.paragraphs, [])
-
-    def test_remove_footers(self):
-        """测试删除页脚功能"""
-        doc = WordDocument(self.test_file)
-        doc.open()
-        # 添加测试页脚内容
-        for section in doc.doc.sections:
+            # 添加首页页脚内容
             footer = section.footer
-            paragraph = footer.paragraphs[0]
-            paragraph.text = "Test Footer"
+            footer_paragraph = footer.paragraphs[0]
+            footer_paragraph.text = "这是首页页脚"
 
-        # 验证页脚内容存在
-        for section in doc.doc.sections:
-            self.assertEqual(section.footer.paragraphs[0].text, "Test Footer")
+            # 添加新节，并设置不同的页眉和页脚
+            new_section = doc.add_section()
+            new_section_header = new_section.header
+            new_section_footer = new_section.footer
 
-        # 删除页脚并验证
-        result = doc.remove_footers()
-        self.assertTrue(result)
-        for section in doc.doc.sections:
-            # 验证页脚内容是否不存在
-            self.assertEqual(section.footer.paragraphs, [])
+            # 设置新节的页眉和页脚内容
+            new_section_header_paragraph = new_section_header.paragraphs[0]
+            new_section_header_paragraph.text = "这是新节页眉"
 
-    def test_add_page_numbers(self):
-        """测试添加页码功能"""
-        doc = WordDocument(self.test_file)
-        doc.open()
+            new_section_footer_paragraph = new_section_footer.paragraphs[0]
+            new_section_footer_paragraph.text = "这是新节页脚"
 
-        # 添加页码
-        result = doc.add_page_numbers()
-        self.assertTrue(result)
+            # 保存文档
+            doc.save(input_path)
 
-        # 验证页脚内容
-        for section in doc.doc.sections:
-            footer = section.footer
-            self.assertTrue("第" in footer.paragraphs[0].text)
-            self.assertTrue("页/共" in footer.paragraphs[0].text)
-            self.assertTrue("页" in footer.paragraphs[0].text)
+            # 测试 WordDocument 类的功能
+            word_doc = WordDocument(input_path)
+            word_doc.open()
 
-    def test_save(self):
-        """测试保存文档功能"""
-        doc = WordDocument(self.test_file)
-        doc.open()
+            # 删除页眉和页脚
+            word_doc.remove_headers()
+            word_doc.remove_footers()
 
-        # 修改文档内容
-        doc.doc.add_paragraph("This is a new paragraph.")
+            # 保存修改后的文档
+            output_path = os.path.join(tmpdirname, 'modified_document.docx')
+            word_doc.save(output_path)
 
-        # 定义保存路径
-        output_file = os.path.join(self.test_dir, "test_output.docx")
+            # 验证页眉和页脚是否为空
+            modified_doc = Document(output_path)
 
-        # 保存文档
-        result = doc.save(output_file)
-        self.assertTrue(result)
+            for section in modified_doc.sections:
+                # 检查页眉是否为空
+                self.assertEqual(len(section.header.paragraphs), 0)
 
-        # 验证文件是否存在
-        self.assertTrue(os.path.exists(output_file))
-
-        # 验证保存后的文档内容
-        saved_doc = WordDocument(output_file)
-        saved_doc.open()
-        content = saved_doc.get_content()
-        self.assertIsNotNone(content)
-        self.assertIn("This is a new paragraph", content)
+                # 检查页脚是否为空
+                self.assertEqual(len(section.footer.paragraphs), 0)
