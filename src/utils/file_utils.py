@@ -39,20 +39,48 @@ class WordDocument:
             print(f"Error opening file: {e}")
             return False
 
+
     def remove_headers(self):
-        """删除文档中所有页眉内容，并断开“链接到前一节”的关系"""
+        """清除所有节的主页眉和偶数页页眉内容，并移除多余空段落"""
         try:
             if self.doc:
                 for section in self.doc.sections:
-                    # 断开链接
                     header = section.header
+                    even_header = section.even_page_header  # 获取偶数页页眉
                     header.is_linked_to_previous = False
 
-                    # 清除页眉内容
-                    for i in range(len(header.paragraphs) - 1, -1, -1):
-                        p = header.paragraphs[i]
-                        p._element.getparent().remove(p._element)
-                        p._element._element = None  # 确保完全删除
+                    # 清除主页眉内容并删除空段落
+                    for paragraph in list(header.paragraphs):
+                        # 清除段落中的所有运行（文本、字段等）
+                        for run in list(paragraph.runs):
+                            run.text = ""
+                        # 如果段落为空，则删除该段落
+                        if len(paragraph.text.strip()) == 0:
+                            p = paragraph._element
+                            p.getparent().remove(p)
+                            p._element = None
+
+                    # 确保主页眉至少有一个段落用于后续操作
+                    if len(header.paragraphs) == 0:
+                        header.add_paragraph()
+
+                    # 处理偶数页页眉
+                    if even_header:
+                        # 清除偶数页页眉内容并删除空段落
+                        for paragraph in list(even_header.paragraphs):
+                            # 清除段落中的所有运行（文本、字段等）
+                            for run in list(paragraph.runs):
+                                run.text = ""
+                            # 如果段落为空，则删除该段落
+                            if len(paragraph.text.strip()) == 0:
+                                p = paragraph._element
+                                p.getparent().remove(p)
+                                p._element = None
+
+                        # 确保偶数页页眉至少有一个段落用于后续操作
+                        if len(even_header.paragraphs) == 0:
+                            even_header.add_paragraph()
+
                 return True
             return False
         except Exception as e:
@@ -60,31 +88,89 @@ class WordDocument:
             return False
 
     def remove_footers(self):
-        """删除文档中所有页脚内容，并断开“链接到前一节”的关系"""
+        """清除所有节的主页脚和偶数页页脚内容，并移除多余空段落"""
         try:
             if self.doc:
                 for section in self.doc.sections:
-                    # 断开链接
                     footer = section.footer
                     footer.is_linked_to_previous = False
 
-                    # 清除页脚内容
-                    for i in range(len(footer.paragraphs) - 1, -1, -1):
-                        p = footer.paragraphs[i]
-                        p._element.getparent().remove(p._element)
-                        p._element._element = None  # 确保完全删除
+                    # 清除段落内容并删除空段落
+                    for paragraph in list(footer.paragraphs):
+                        # 删除段落中的所有运行（文本、字段等）
+                        for run in list(paragraph.runs):
+                            run.text = ""
+                        # 删除空段落后保留结构
+                        if len(paragraph.text.strip()) == 0:
+                            p = paragraph._element
+                            p.getparent().remove(p)
+                            p._element = None
+
+                    # 确保至少有一个空段落用于后续操作
+                    if len(footer.paragraphs) == 0:
+                        footer.add_paragraph()
+
                 return True
             return False
         except Exception as e:
             print(f"Error removing footers: {e}")
             return False
 
-    def add_page_numbers(self):
-        """在文档页脚添加页码
+    def _add_page_number_to_footer(self, footer):
+        """向指定页脚中添加页码字段，使用推荐的标准方式"""
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        from docx.oxml.ns import qn
+        from docx.oxml import OxmlElement
+        from docx.shared import Pt
 
-        Returns:
-            bool: 添加页码成功返回True，否则返回False
-        """
+        # 清空现有段落（仅清空文本，保留空段落）
+        for paragraph in list(footer.paragraphs):
+            paragraph.text = ""
+
+        # 添加新段落并居中
+        paragraph = footer.add_paragraph()
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+        # 添加页码文本和字段
+        run = paragraph.add_run("第")
+        run.font.size = Pt(10)
+
+        # 插入 PAGE 字段
+        page_field = paragraph.add_run()
+        page_field._element.append(OxmlElement("w:fldChar"))
+        page_field._element[0].set(qn("w:fldCharType"), "begin")
+
+        instr_text = OxmlElement("w:instrText")
+        instr_text.set(qn("xml:space"), "preserve")
+        instr_text.text = 'PAGE \\* MERGEFORMAT'
+        page_field._element.append(instr_text)
+
+        end_field = OxmlElement("w:fldChar")
+        end_field.set(qn("w:fldCharType"), "end")
+        page_field._element.append(end_field)
+
+        run = paragraph.add_run("页/共")
+        run.font.size = Pt(10)
+
+        # 插入 NUMPAGES 字段
+        pages_field = paragraph.add_run()
+        pages_field._element.append(OxmlElement("w:fldChar"))
+        pages_field._element[0].set(qn("w:fldCharType"), "begin")
+
+        instr_text = OxmlElement("w:instrText")
+        instr_text.set(qn("xml:space"), "preserve")
+        instr_text.text = 'NUMPAGES \\* MERGEFORMAT'
+        pages_field._element.append(instr_text)
+
+        end_field = OxmlElement("w:fldChar")
+        end_field.set(qn("w:fldCharType"), "end")
+        pages_field._element.append(end_field)
+
+        run = paragraph.add_run("页")
+        run.font.size = Pt(10)
+
+    def add_page_numbers(self):
+        """在文档页脚添加页码，支持奇偶页不同设置，并确保字段可被识别"""
         try:
             if self.doc:
                 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -92,33 +178,37 @@ class WordDocument:
                 from docx.oxml import OxmlElement
 
                 for section in self.doc.sections:
+                    # 获取主（奇数）页脚
                     footer = section.footer
-                    if len(footer.paragraphs) == 0:
-                        paragraph = footer.add_paragraph()
-                    else:
-                        paragraph = footer.paragraphs[0]
-                    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    footer.is_linked_to_previous = False  # 断开链接
 
-                    # 创建页码字段
-                    run = paragraph.add_run()
-                    run.text = "第"
+                    # 清空现有段落
+                    for paragraph in list(footer.paragraphs):
+                        p = paragraph._element
+                        p.getparent().remove(p)
+                        p._element = None
 
-                    # 创建PAGE字段
-                    page_fld = OxmlElement("w:fldSimple")
-                    page_fld.set(qn("w:instr"), r"PAGE \* MERGEFORMAT")
-                    paragraph._element.append(page_fld)
+                    # 添加页码
+                    self._add_page_number_to_footer(footer)
 
-                    run = paragraph.add_run()
-                    run.text = "页/共"
+                    # 如果存在偶数页页脚，也添加页码
+                    even_footer = section.even_page_footer
+                    if even_footer:
+                        # 断开链接
+                        even_footer.is_linked_to_previous = False
 
-                    # 创建NUMPAGES字段
-                    pages_fld = OxmlElement("w:fldSimple")
-                    pages_fld.set(qn("w:instr"), r"NUMPAGES \* MERGEFORMAT")
-                    paragraph._element.append(pages_fld)
+                        # 清空现有段落
+                        for paragraph in list(even_footer.paragraphs):
+                            p = paragraph._element
+                            p.getparent().remove(p)
+                            p._element = None
 
-                    run = paragraph.add_run()
-                    run.text = "页"
-            return True
+                        self._add_page_number_to_footer(even_footer)
+
+                # 插入一个空白节以帮助 Word 刷新字段
+                self.doc.add_section()
+
+                return True
         except Exception as e:
             print(f"Error adding page numbers: {e}")
             return False
